@@ -1,0 +1,9 @@
+# local history
+.history
+
+# cache
+__pycache__
+
+# h5 model file
+model.h5
+model.json
