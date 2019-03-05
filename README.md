@@ -24,8 +24,3 @@ $ python qlearn.py -m run
 ```
 
 > If you want to train the network from beginning, delete the model.h5 and run with `python qlearn.py -m train`
-
-## TODO
-
--   [x] Py2 -> Py3
--   [ ] Store model over time

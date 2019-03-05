@@ -1,4 +1,7 @@
+# -*- coding: utf-8 -*-
+
 import argparse
+import os
 import random
 from collections import deque
 
@@ -14,17 +17,21 @@ import game.wrapped_flappy_bird as game
 GAME = 'bird'  # the name of the game being played for log files
 ACTIONS = 2  # number of valid actions
 GAMMA = 0.99  # decay rate of past observations
-OBSERVATION = 1000.  # timesteps to observe before training
-EXPLORE = 100000.  # frames over which to anneal epsilon
+OBSERVATION = 5000.  # timesteps to observe before training
+EXPLORE = 50000.  # frames over which to anneal epsilon
 FINAL_EPSILON = 0.0001  # final value of epsilon
 INITIAL_EPSILON = 0.1  # starting value of epsilon
 REPLAY_MEMORY = 50000  # number of previous transitions to remember
 BATCH = 32  # size of minibatch
 FRAME_PER_ACTION = 1
 LEARNING_RATE = 1e-4
+TIME_PERIOD = 1000
 
 IMG_ROWS, IMG_COLS = 80, 80  # Convert image into Black and white
 IMG_CHANNELS = 4  # We stack 4 frames
+
+basedir = 'saved_networks'
+model_name = 'model'
 
 
 def build_model():
@@ -51,6 +58,15 @@ def build_model():
 
 
 def trainNetwork(model, args):
+    if args['mode'] == 'run':
+        OBSERVE = 999999999  # We keep observe, never train
+        epsilon = FINAL_EPSILON
+    elif args['mode'] == 'train':  # We go to training mode
+        OBSERVE = OBSERVATION
+        epsilon = INITIAL_EPSILON
+    else:
+        raise ValueError('Please key in run or train.')
+
     # open up a game state to communicate with emulator
     game_state = game.GameState()
 
@@ -66,25 +82,27 @@ def trainNetwork(model, args):
     x_t = skimage.transform.resize(x_t, (80, 80))
     x_t = skimage.exposure.rescale_intensity(x_t, out_range=(0, 255))
 
-    x_t = x_t / 255.0
+    x_t /= 255
 
     s_t = np.stack((x_t, x_t, x_t, x_t), axis=2)
-    # print (s_t.shape)
 
     # In Keras, need to reshape
     s_t = s_t.reshape(1, s_t.shape[0], s_t.shape[1], s_t.shape[2])  # 1*80*80*4
 
-    if args['mode'] == 'run':
-        OBSERVE = 999999999  # We keep observe, never train
-        epsilon = FINAL_EPSILON
-        print("Now we load weight")
-        model.load_weights("model.h5")
-        adam = Adam(lr=LEARNING_RATE)
-        model.compile(loss='mse', optimizer=adam)
-        print("Weight load successfully")
-    else:  # We go to training mode
-        OBSERVE = OBSERVATION
-        epsilon = INITIAL_EPSILON
+    t0 = 0
+    print("{} Now we load weight {}".format('-'*30, '-'*30))
+    checkpoint = tf.train.get_checkpoint_state(basedir)
+    if checkpoint and checkpoint.model_checkpoint_path:
+        model_path = checkpoint.model_checkpoint_path
+        name = model_path.rsplit(os.path.sep)[1]
+        t0 = int(name.rsplit('-')[1])
+        model.load_weights(model_path)
+        print("Successfully loaded:", checkpoint.model_checkpoint_path)
+    else:
+        print("Could not find any old network weights.")
+
+    adam = Adam(lr=LEARNING_RATE)
+    model.compile(loss='mse', optimizer=adam)
 
     t = 0
     while True:
@@ -96,7 +114,7 @@ def trainNetwork(model, args):
         # choose an action epsilon greedy
         if t % FRAME_PER_ACTION == 0:
             if random.random() <= epsilon:
-                print("----------Random Action----------")
+                print("{} Random Action {}".format('-'*30, '-'*30))
                 action_index = random.randrange(ACTIONS)
                 a_t[action_index] = 1
             else:
@@ -117,7 +135,7 @@ def trainNetwork(model, args):
         x_t1 = skimage.transform.resize(x_t1, (80, 80))
         x_t1 = skimage.exposure.rescale_intensity(x_t1, out_range=(0, 255))
 
-        x_t1 = x_t1 / 255.0
+        x_t1 /= 255
 
         x_t1 = x_t1.reshape(1, x_t1.shape[0], x_t1.shape[1], 1)  # 1x80x80x1
         s_t1 = np.append(x_t1, s_t[:, :, :, :3], axis=3)
@@ -146,13 +164,14 @@ def trainNetwork(model, args):
         s_t = s_t1
         t += 1
 
-        # save progress every 10000 iterations
-        if t % 1000 == 0:
-            print("Now we save model")
-            model.save_weights("model.h5", overwrite=True)
+        # save progress every TIME_PERIOD iterations
+        if t % TIME_PERIOD == 0 and args['mode'] == 'train':
+            print("{} Now we save model {}".format('-'*30, '-'*30))
+            model_path = os.path.join(
+                basedir, "{}-{}".format(model_name, t+t0))
+            model.save_weights(model_path)
 
         # print info
-        state = ""
         if t <= OBSERVE:
             state = "observe"
         elif t > OBSERVE and t <= OBSERVE + EXPLORE:
@@ -160,16 +179,15 @@ def trainNetwork(model, args):
         else:
             state = "train"
 
-        print("TIMESTEP", t, "/ STATE", state,
-              "/ EPSILON", epsilon, "/ ACTION", action_index, "/ REWARD", r_t,
-              "/ Q_MAX ", np.max(Q_sa), "/ Loss ", loss)
+        print(
+            "TIMESTEP: {}, STATE: {}, EPSILON: {:.5f}, ACTION: {}, REWARD: {}, Q_MAX: {:.2f}, Loss: {:.5f}".format(
+                t+t0, state, epsilon, action_index, r_t, np.max(Q_sa), loss))
 
-    print("Episode finished!")
-    print("************************")
+    print("{} Episode finished! {}".format('-'*30, '-'*30))
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Description of your program')
+    parser = argparse.ArgumentParser()
     parser.add_argument('-m', '--mode', help='train / run', required=True)
     args = vars(parser.parse_args())
     model = build_model()
