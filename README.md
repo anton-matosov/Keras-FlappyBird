@@ -11,7 +11,7 @@ Please read the following [blog](https://yanpanlau.github.io/2016/07/10/FlappyBi
 ## Requestment
 
 -   Python 3.x
--   Tensorflow >= 1.11.0
+-   Tensorflow >= 1.10.0
 -   pygame
 -   scikit-image
 

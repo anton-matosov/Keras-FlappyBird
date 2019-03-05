@@ -1,0 +1,5 @@
+numpy
+pygame
+scikit-image
+Tensorflow>=1.10.0
+tensorflow-gpu>=1.10.0
