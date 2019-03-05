@@ -12,7 +12,6 @@ from tensorflow.keras.optimizers import Adam
 import game.wrapped_flappy_bird as game
 
 GAME = 'bird'  # the name of the game being played for log files
-CONFIG = 'nothreshold'
 ACTIONS = 2  # number of valid actions
 GAMMA = 0.99  # decay rate of past observations
 OBSERVATION = 1000.  # timesteps to observe before training
@@ -24,15 +23,17 @@ BATCH = 32  # size of minibatch
 FRAME_PER_ACTION = 1
 LEARNING_RATE = 1e-4
 
-IMG_ROWS, IMG_COLS = 80, 80
-# Convert image into Black and white
+IMG_ROWS, IMG_COLS = 80, 80  # Convert image into Black and white
 IMG_CHANNELS = 4  # We stack 4 frames
 
 
-def buildmodel():
+def build_model():
     model = Sequential()
-    model.add(
-        Convolution2D(32, 8, 8, input_shape=(IMG_ROWS, IMG_COLS, IMG_CHANNELS)))  # 80*80*4
+    model.add(Convolution2D(
+        32, 8, 8,
+        input_shape=(IMG_ROWS, IMG_COLS, IMG_CHANNELS))
+    )  # 80*80*4
+
     model.add(Activation('relu'))
     model.add(Convolution2D(64, 4, 4))
     model.add(Activation('relu'))
@@ -45,6 +46,7 @@ def buildmodel():
 
     adam = Adam(lr=LEARNING_RATE)
     model.compile(loss='mse', optimizer=adam)
+
     return model
 
 
@@ -85,7 +87,7 @@ def trainNetwork(model, args):
         epsilon = INITIAL_EPSILON
 
     t = 0
-    while (True):
+    while True:
         loss = 0
         Q_sa = 0
         action_index = 0
@@ -136,8 +138,8 @@ def trainNetwork(model, args):
             state_t1 = np.concatenate(state_t1)
             targets = model.predict(state_t)
             Q_sa = model.predict(state_t1)
-            targets[range(BATCH), action_t] = reward_t + GAMMA * \
-                np.max(Q_sa, axis=1)*np.invert(terminal)
+            targets[range(BATCH), action_t] = (
+                reward_t + GAMMA * np.max(Q_sa, axis=1)*np.invert(terminal))
 
             loss += model.train_on_batch(state_t, targets)
 
@@ -170,7 +172,7 @@ def main():
     parser = argparse.ArgumentParser(description='Description of your program')
     parser.add_argument('-m', '--mode', help='train / run', required=True)
     args = vars(parser.parse_args())
-    model = buildmodel()
+    model = build_model()
     trainNetwork(model, args)
 
 
